@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MioBudget PRO</title>
+    <style>
+        :root {
+            --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --secondary: #64748b;
+            --danger: #e11d48; --success: #10b981;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 15px; color: #1e293b; }
+        .container { max-width: 500px; margin: 0 auto; }
+        .card { background: var(--card); border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 15px; border: 1px solid #e2e8f0; }
+        .balance-container { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; }
+        .balance { font-size: 2.2rem; font-weight: 800; color: var(--primary); letter-spacing: -1px; }
+        .toggle-visibility { background: #f1f5f9; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; color: var(--secondary); font-weight: bold; }
+        .type-selector { display: flex; gap: 5px; margin-bottom: 15px; background: #f1f5f9; padding: 5px; border-radius: 12px; }
+        .type-btn { flex: 1; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; background: transparent; color: var(--secondary); transition: 0.3s; }
+        .type-btn.active.out { background: var(--danger); color: white; }
+        .type-btn.active.in { background: var(--success); color: white; }
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        input, select { width: 100%; padding: 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 1rem; box-sizing: border-box; outline: none; background: white; }
+        .btn-main { width: 100%; padding: 16px; border: none; border-radius: 10px; background: var(--primary); color: white; font-weight: bold; font-size: 1rem; }
+        .budget-item { margin-bottom: 12px; }
+        .budget-info { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; }
+        .progress-bar { height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; transition: width 0.5s ease-out; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.9); z-index: 100; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 85%; max-width: 380px; text-align: center; max-height: 90vh; overflow-y: auto; }
+        .history { max-height: 200px; overflow-y: auto; font-size: 0.85rem; }
+        .history-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+        .savings-alert { background: #ecfdf5; color: #065f46; padding: 12px; border-radius: 10px; margin-bottom: 15px; font-size: 0.85rem; border: 1px solid #a7f3d0; line-height: 1.4; text-align: left; }
+        .backup-section { display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+        .btn-small { padding: 8px; font-size: 0.75rem; background: var(--secondary); border:none; color:white; border-radius:5px; flex:1; cursor: pointer;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="margin: 10px 0;">MioBudget</h2>
+        <span id="current-date-display" style="font-size: 0.7rem; color: var(--secondary);">Oggi: --/--/----</span>
+    </div>
+
+    <div class="card">
+        <div style="font-size: 0.8rem; color: var(--secondary); text-transform: uppercase;">Saldo Attuale</div>
+        <div class="balance-container">
+            <div class="balance" id="total-balance">€ ****</div>
+            <button class="toggle-visibility" onclick="toggleBalance()">MOSTRA</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="type-selector">
+            <button class="type-btn active out" id="btn-out" onclick="setType('out')">USCITA</button>
+            <button class="type-btn in" id="btn-in" onclick="setType('in')">ENTRATA</button>
+        </div>
+        <div class="grid-inputs">
+            <input type="number" id="amount" placeholder="Importo €" inputmode="decimal">
+            <select id="category"></select>
+        </div>
+        <button class="btn-main" onclick="addTransaction()">REGISTRA OPERAZIONE</button>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0; font-size: 1rem;">Budget Mensili</h3>
+        <div id="budgets-container"></div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0; font-size: 1rem;">Storico & Backup</h3>
+        <div class="history" id="history"></div>
+        <div class="backup-section">
+            <button class="btn-small" onclick="exportData()">SCARICA JSON</button>
+            <button class="btn-small" style="background:#94a3b8" onclick="restoreFromInternal()">RESET A IERI</button>
+        </div>
+    </div>
+</div>
+
+<div id="salary-modal" class="modal">
+    <div class="modal-content">
+        <h2>💰 Giorno 27!</h2>
+        <div id="savings-message"></div>
+        <p>Inserisci lo stipendio ricevuto:</p>
+        <input type="number" id="salary-amount" placeholder="Importo €" style="margin-bottom: 20px;">
+        <button class="btn-main" onclick="saveSalary()">AGGIUNGI STIPENDIO</button>
+    </div>
+</div>
+
+<script>
+    const categories = {
+        out: ['Spese Varie', 'Magic', 'Anticipi', 'Investimenti', 'Giroconti', 'Ritiro contanti'],
+        in: ['Stipendio', 'Rimborsi', 'Tredicesima', 'Quattordicesima', 'Vincite Magic', 'Entrate varie']
+    };
+
+    const baseLimits = { 'Spese Varie': 200, 'Magic': 200, 'Anticipi': Infinity, 'Investimenti': Infinity, 'Giroconti': Infinity, 'Ritiro contanti': Infinity };
+
+    let balanceVisible = false;
+    let currentType = 'out';
+    
+    let data = JSON.parse(localStorage.getItem('myBudgetData')) || {
+        balance: 0, transactions: [], lastSalaryMonth: -1, magicBonus: 0, lastBackupDate: ''
+    };
+
+    function init() {
+        updateDateDisplay();
+        updateCategorySelect();
+        autoBackupInternal();
+        render();
+        checkSalaryDay();
+    }
+
+    function updateDateDisplay() {
+        document.getElementById('current-date-display').innerText = "Oggi: " + new Date().toLocaleDateString();
+    }
+
+    function setType(type) {
+        currentType = type;
+        document.getElementById('btn-out').classList.toggle('active', type === 'out');
+        document.getElementById('btn-in').classList.toggle('active', type === 'in');
+        updateCategorySelect();
+    }
+
+    function updateCategorySelect() {
+        const select = document.getElementById('category');
+        select.innerHTML = categories[currentType].map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    function addTransaction() {
+        const amt = parseFloat(document.getElementById('amount').value);
+        if (isNaN(amt) || amt <= 0) return;
+        data.balance += (currentType === 'in' ? amt : -amt);
+        data.transactions.unshift({
+            date: new Date().toISOString(),
+            cat: document.getElementById('category').value,
+            amount: amt,
+            type: currentType
+        });
+        document.getElementById('amount').value = '';
+        saveAndRender();
+        setTimeout(checkSalaryDay, 100);
+    }
+
+    function getBudgetPeriod(dateString) {
+        const d = new Date(dateString);
+        let m = d.getMonth();
+        let y = d.getFullYear();
+        if (d.getDate() >= 27) {
+            m++;
+            if (m > 11) { m = 0; y++; }
+        }
+        return { month: m, year: y };
+    }
+
+    function calculateSpent(category, targetMonth, targetYear) {
+        let total = 0;
+        for (let i = 0; i < data.transactions.length; i++) {
+            let t = data.transactions[i];
+            if (t.type !== 'out' || t.cat !== category) continue;
+            
+            let tPeriod = getBudgetPeriod(t.date);
+            if (tPeriod.year === targetYear && tPeriod.month === targetMonth) {
+                total += parseFloat(t.amount);
+            }
+        }
+        return total;
+    }
+
+    function checkSalaryDay() {
+        const today = new Date();
+        const currentMonthCalendar = today.getMonth();
+        
+        if (today.getDate() >= 27 && data.lastSalaryMonth !== currentMonthCalendar) {
+            
+            let todayPeriod = getBudgetPeriod(today.toISOString());
+            
+            let prevMonth = todayPeriod.month === 0 ? 11 : todayPeriod.month - 1;
+            let prevYear = todayPeriod.month === 0 ? todayPeriod.year - 1 : todayPeriod.year;
+
+            const spentVarie = calculateSpent('Spese Varie', prevMonth, prevYear);
+            const spentMagic = calculateSpent('Magic', prevMonth, prevYear);
+
+            const saveVarie = Math.max(0, 200 - spentVarie);
+            const currentMagicLimit = 200 + (data.magicBonus || 0);
+            const saveMagicTotal = Math.max(0, currentMagicLimit - spentMagic);
+            
+            const magicToInvest = saveMagicTotal / 2;
+            const magicToBonus = saveMagicTotal / 2;
+
+            const msgDiv = document.getElementById('savings-message');
+            msgDiv.innerHTML = `
+                <div class="savings-alert">
+                    💰 <b>Risparmi Budget ${prevMonth + 1}/${prevYear}:</b><br>
+                    Varie: <b>€ ${saveVarie.toFixed(2)}</b> (Spesi: ${spentVarie.toFixed(2)})<br>
+                    Magic: <b>€ ${saveMagicTotal.toFixed(2)}</b> (Spesi: ${spentMagic.toFixed(2)})<br><br>
+                    🚀 <b>Da Investire: € ${(saveVarie + magicToInvest).toFixed(2)}</b><br>
+                    <small>Bonus Magic mese prossimo: € ${magicToBonus.toFixed(2)}</small>
+                </div>`;
+                
+            data.tempNextMagicBonus = magicToBonus;
+            document.getElementById('salary-modal').style.display = 'flex';
+        }
+    }
+
+    function saveSalary() {
+        const amt = parseFloat(document.getElementById('salary-amount').value);
+        if (isNaN(amt)) return;
+        data.balance += amt;
+        data.lastSalaryMonth = new Date().getMonth();
+        data.magicBonus = data.tempNextMagicBonus || 0;
+        data.transactions.unshift({ date: new Date().toISOString(), cat: 'Stipendio', amount: amt, type: 'in' });
+        document.getElementById('salary-modal').style.display = 'none';
+        saveAndRender();
+    }
+
+    function autoBackupInternal() {
+        const todayStr = new Date().toDateString();
+        if (data.lastBackupDate !== todayStr) {
+            localStorage.setItem('internal_restore_point', JSON.stringify(data));
+            data.lastBackupDate = todayStr;
+            save();
+        }
+    }
+
+    function exportData() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+        const link = document.createElement('a');
+        link.setAttribute("href", dataStr);
+        link.setAttribute("download", `backup_budget.json`);
+        link.click();
+    }
+
+    function restoreFromInternal() {
+        const bkp = localStorage.getItem('internal_restore_point');
+        if (bkp && confirm("Ripristinare i dati a ieri?")) {
+            data = JSON.parse(bkp);
+            saveAndRender();
+        }
+    }
+
+    function toggleBalance() {
+        balanceVisible = !balanceVisible;
+        document.querySelector('.toggle-visibility').innerText = balanceVisible ? 'NASCONDI' : 'MOSTRA';
+        render();
+    }
+
+    function save() { localStorage.setItem('myBudgetData', JSON.stringify(data)); }
+    function saveAndRender() { save(); render(); }
+
+    function render() {
+        document.getElementById('total-balance').innerText = balanceVisible ? `€ ${data.balance.toFixed(2)}` : `€ ****`;
+        let html = '';
+        
+        let currentPeriod = getBudgetPeriod(new Date().toISOString());
+
+        for (let cat in baseLimits) {
+            const spent = calculateSpent(cat, currentPeriod.month, currentPeriod.year);
+            let limit = baseLimits[cat];
+            if (cat === 'Magic' && data.magicBonus > 0) limit += data.magicBonus;
+            const perc = limit === Infinity ? 0 : Math.min((spent / limit) * 100, 100);
+            const color = perc > 90 ? 'var(--danger)' : 'var(--success)';
+            html += `
+                <div class="budget-item">
+                    <div class="budget-info">
+                        <span><b>${cat}</b> ${cat==='Magic' && data.magicBonus > 0 ? '<small style="color:var(--success)">+'+data.magicBonus.toFixed(2)+'</small>' : ''}</span>
+                        <span>€${spent.toFixed(2)} / ${limit === Infinity ? '∞' : '€'+limit.toFixed(2)}</span>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${perc}%; background:${color}"></div></div>
+                </div>`;
+        }
+        document.getElementById('budgets-container').innerHTML = html;
+        document.getElementById('history').innerHTML = data.transactions.slice(0, 10).map(t => {
+            const d = new Date(t.date);
+            return `<div class="history-item">
+                <span><b>${t.cat}</b> <small style="color:#94a3b8">${d.getDate()}/${d.getMonth()+1}</small></span>
+                <span style="color:${t.type==='in'?'var(--success)':'var(--danger)'}">${t.type==='in'?'+':'-'}€${t.amount.toFixed(2)}</span>
+            </div>`}).join('');
+    }
+
+    init();
+</script>
+</body>
+</html>
